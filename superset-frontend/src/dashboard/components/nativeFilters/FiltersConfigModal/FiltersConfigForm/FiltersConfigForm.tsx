@@ -1290,6 +1290,23 @@ const FiltersConfigForm = (
                     setNativeFilterFieldValues(form, filterId, {
                       defaultDataMask: null,
                     });
+                  } else {
+                    // When the checkbox is checked, explicitly set an empty default data mask
+                    // for range filters to trigger validation
+                    if (formFilter?.filterType === 'filter_range') {
+                      setNativeFilterFieldValues(form, filterId, {
+                        defaultDataMask: {
+                          extraFormData: {},
+                          filterState: {
+                            value: [null, null],
+                          },
+                        },
+                      });
+                    }
+                    // Validate immediately when the checkbox is checked
+                    form.validateFields([
+                      ['filters', filterId, 'defaultDataMask'],
+                    ]);
                   }
                   formChanged();
                 }}
@@ -1305,9 +1322,20 @@ const FiltersConfigForm = (
                     rules={[
                       {
                         validator: () => {
-                          if (formFilter?.defaultDataMask?.filterState?.value) {
-                            // requires managing the error as the DefaultValue
-                            // component does not use an Antdesign compatible input
+                          // For range filters, check if at least one of the values in the array is non-null
+                          const value =
+                            formFilter?.defaultDataMask?.filterState?.value;
+                          const isRangeFilter =
+                            formFilter?.filterType === 'filter_range';
+
+                          // Check if value exists and is valid
+                          const hasValidValue =
+                            (isRangeFilter &&
+                              Array.isArray(value) &&
+                              (value[0] !== null || value[1] !== null)) ||
+                            (!isRangeFilter && !!value);
+
+                          if (hasValidValue) {
                             const formValidationFields = form.getFieldsError();
                             setErroredFilters(prevErroredFilters => {
                               if (
@@ -1322,6 +1350,7 @@ const FiltersConfigForm = (
                             });
                             return Promise.resolve();
                           }
+
                           setErroredFilters(prevErroredFilters => {
                             if (prevErroredFilters.includes(filterId)) {
                               return prevErroredFilters;
