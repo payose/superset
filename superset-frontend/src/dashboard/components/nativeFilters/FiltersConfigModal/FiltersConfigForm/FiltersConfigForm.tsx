@@ -816,6 +816,13 @@ const FiltersConfigForm = (
     </StyledRowFormItem>
   );
 
+  const isValidFilterValue = (value: any, isRangeFilter: boolean) => {
+    if (isRangeFilter) {
+      return Array.isArray(value) && (value[0] !== null || value[1] !== null);
+    }
+    return !!value;
+  };
+
   return (
     <StyledTabs
       activeKey={activeTabKey}
@@ -1329,11 +1336,10 @@ const FiltersConfigForm = (
                             formFilter?.filterType === 'filter_range';
 
                           // Check if value exists and is valid
-                          const hasValidValue =
-                            (isRangeFilter &&
-                              Array.isArray(value) &&
-                              (value[0] !== null || value[1] !== null)) ||
-                            (!isRangeFilter && !!value);
+                          const hasValidValue = isValidFilterValue(
+                            value,
+                            isRangeFilter,
+                          );
 
                           if (hasValidValue) {
                             const formValidationFields = form.getFieldsError();
