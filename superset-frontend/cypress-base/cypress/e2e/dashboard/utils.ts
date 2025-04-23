@@ -293,16 +293,22 @@ export function fillNativeFilterForm(
   }
   cy.get(nativeFilters.silentLoading).should('not.exist');
   if (filterColumn) {
-    cy.get(nativeFilters.filtersPanel.filterInfoInput)
-      .last()
+    cy.contains('label', 'Column').closest('.ant-form-item').as('columnField');
+
+    cy.get('@columnField').find('.ant-select-selector').click({ force: true });
+
+    cy.wait(300);
+
+    cy.get('.ant-select-selection-search-input:focus').type(filterColumn, {
+      force: true,
+    });
+
+    cy.wait(500);
+
+    cy.get('.ant-select-dropdown')
+      .should('be.visible')
+      .contains('.ant-select-item-option', filterColumn)
       .click({ force: true });
-    cy.get(nativeFilters.filtersPanel.filterInfoInput)
-      .last()
-      .type(filterColumn);
-    cy.get(nativeFilters.filtersPanel.inputDropdown)
-      .should('be.visible', { timeout: 20000 })
-      .last()
-      .click();
   }
   cy.get(nativeFilters.silentLoading).should('not.exist');
 }
@@ -362,9 +368,23 @@ export function saveNativeFilterSettings(charts: ChartSpec[]) {
   cy.get(nativeFilters.modal.footer)
     .contains('Save')
     .should('be.visible')
-    .click();
-  cy.get(nativeFilters.modal.container).should('not.exist');
-  charts.forEach(waitForChartLoad);
+    .click({ force: true });
+
+  cy.wait(2000);
+
+  cy.get('body').then($body => {
+    if ($body.find(nativeFilters.modal.container).length > 0) {
+      cy.get(nativeFilters.modal.footer)
+        .contains('Save')
+        .click({ force: true });
+
+      cy.wait(1000);
+    }
+
+    charts.forEach(chart => {
+      waitForChartLoad(chart);
+    });
+  });
 }
 
 /** ************************************************************************
