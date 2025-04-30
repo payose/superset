@@ -24,12 +24,12 @@ import {
   NumberFormats,
   styled,
   t,
+  useTheme,
 } from '@superset-ui/core';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { InputNumber } from 'src/components/Input';
 import Slider from 'src/components/Slider';
 import { FilterBarOrientation } from 'src/dashboard/types';
-import Metadata from 'src/components/Metadata';
 import { isNumber } from 'lodash';
 import { Tooltip } from 'src/components/Tooltip';
 import { Icons } from 'src/components/Icons';
@@ -42,11 +42,13 @@ type InputValue = number | null;
 type RangeValue = [InputValue, InputValue];
 
 const StyledDivider = styled.span`
-  margin: 0 ${({ theme }) => theme.gridUnit * 3}px;
-  color: ${({ theme }) => theme.colors.grayscale.light1};
-  font-weight: ${({ theme }) => theme.typography.weights.bold};
-  font-size: ${({ theme }) => theme.typography.sizes.m}px;
-  align-content: center;
+  ${({ theme }) => `
+    margin: 0 ${theme.gridUnit * 3}px;
+    color: ${theme.colors.grayscale.light1};
+    font-weight: ${theme.typography.weights.bold};
+    font-size: ${theme.typography.sizes.m}px;
+    align-content: center;
+  `}
 `;
 
 const Wrapper = styled.div`
@@ -62,53 +64,51 @@ const Wrapper = styled.div`
 `;
 
 const SliderWrapper = styled.div`
-  margin: ${({ theme }) => theme.gridUnit * 4}px 0;
-  padding: 0 ${({ theme }) => theme.gridUnit}px;
-  width: 100%;
-  min-width: 200px;
-`;
-
-const ErrorIconWrapper = styled.div`
-  margin-right: ${({ theme }) => theme.gridUnit * 2}px;
-  display: flex;
-  align-items: center;
+  ${({ theme }) => `
+    margin: ${theme.gridUnit * 4}px 0;
+    padding: 0 ${theme.gridUnit}px;
+    width: 100%;
+    min-width: 200px;
+  `}
 `;
 
 const HorizontalLayout = styled.div`
-  display: flex;
-  flex-direction: column;
-  gap: ${({ theme }) => theme.gridUnit * 4}px;
-  width: 100%;
-
-  .controls-container {
+  ${({ theme }) => `
     display: flex;
-    align-items: center;
-    gap: ${({ theme }) => theme.gridUnit * 4}px;
+    flex-direction: column;
+    gap: ${theme.gridUnit * 4}px;
     width: 100%;
 
-    .slider-wrapper {
+    .controls-container {
       display: flex;
       align-items: center;
-      flex: 2;
+      gap: ${theme.gridUnit * 4}px;
+      width: 100%;
+
+      .slider-wrapper {
+        display: flex;
+        align-items: center;
+        flex: 2;
+      }
+
+      .slider-container {
+        flex: 1;
+        min-width: 180px;
+      }
+
+      .inputs-container {
+        flex: 1;
+        min-width: 200px;
+        max-width: 300px;
+      }
     }
 
-    .slider-container {
-      flex: 1;
-      min-width: 180px;
+    .message-container {
+      width: 100%;
+      text-align: center;
+      padding-top: ${theme.gridUnit * 2}px;
     }
-
-    .inputs-container {
-      flex: 1;
-      min-width: 200px;
-      max-width: 300px;
-    }
-  }
-
-  .message-container {
-    width: 100%;
-    text-align: center;
-    padding-top: ${({ theme }) => theme.gridUnit * 2}px;
-  }
+  `}
 `;
 
 const numberFormatter = getNumberFormatter(NumberFormats.SMART_NUMBER);
@@ -209,6 +209,7 @@ const validateRange = (
 };
 
 export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
+  const theme = useTheme();
   const {
     data,
     formData,
@@ -413,7 +414,6 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
       let newInputValue: RangeValue;
 
       if (enableSingleValue !== undefined) {
-        // Single value mode - value is a number
         const singleValue =
           typeof value === 'number'
             ? value
@@ -444,8 +444,6 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
     [min, max, enableSingleValue, updateDataMaskValue],
   );
 
-  // First, create a shared function to determine the message and status
-  // First, create a shared function to determine the message and status
   const getMessageAndStatus = useCallback(() => {
     const defaultMessage = t('Choose numbers between %(min)s and %(max)s', {
       min,
@@ -453,21 +451,19 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
     });
 
     if (error) {
-      return { message: error, status: 'error' };
+      return { message: error, status: 'error' as const };
     }
 
     if (enableSingleValue !== undefined && metadataText) {
-      return { message: metadataText, status: 'help' };
+      return { message: metadataText, status: 'help' as const };
     }
 
-    return { message: defaultMessage, status: 'help' };
-  }, [error, min, max, enableSingleValue, metadataText, t]);
+    return { message: defaultMessage, status: 'help' as const };
+  }, [error, min, max, enableSingleValue, metadataText]);
 
-  // Create UI components that use the message
   const MessageDisplay = useCallback(() => {
     const { message, status } = getMessageAndStatus();
 
-    // Different rendering based on orientation
     if (filterBarOrientation === FilterBarOrientation.Vertical) {
       return <StatusMessage status={status}>{message}</StatusMessage>;
     }
@@ -479,15 +475,16 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
     const { message, status } = getMessageAndStatus();
 
     return (
-      <ErrorIconWrapper>
-        <Tooltip title={message} placement="top">
-          {status === 'error' ? (
-            <Icons.ExclamationCircleOutlined iconSize="m" iconColor="error" />
-          ) : (
-            <Icons.InfoCircleOutlined iconSize="m" iconColor="primary" />
-          )}
-        </Tooltip>
-      </ErrorIconWrapper>
+      <Tooltip title={message} placement="top">
+        <Icons.InfoCircleOutlined
+          iconSize="m"
+          iconColor={
+            status === 'error'
+              ? theme.colors.error.base
+              : theme.colors.grayscale.base
+          }
+        />
+      </Tooltip>
     );
   }, [getMessageAndStatus]);
 
@@ -520,28 +517,37 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
     });
   }, [enableSingleValue]);
 
-  const renderSlider = () => (
-    <SliderWrapper>
-      <Slider
-        min={min}
-        max={max}
-        range={enableSingleValue === undefined}
-        value={
-          enableSingleValue !== undefined
-            ? Array.isArray(sliderValue)
-              ? sliderValue[0]
-              : sliderValue
-            : Array.isArray(sliderValue)
-              ? sliderValue
-              : [min, sliderValue]
-        }
-        onChange={handleSliderChange}
-        tooltip={{
-          formatter: val => (val !== null ? numberFormatter(val) : ''),
-        }}
-      />
-    </SliderWrapper>
-  );
+  const renderSlider = () => {
+    if (enableSingleValue !== undefined) {
+      return (
+        <SliderWrapper>
+          <Slider
+            min={min}
+            max={max}
+            value={Array.isArray(sliderValue) ? sliderValue[0] : sliderValue}
+            onChange={handleSliderChange}
+            tooltip={{
+              formatter: val => (val !== null ? numberFormatter(val) : ''),
+            }}
+          />
+        </SliderWrapper>
+      );
+    }
+    return (
+      <SliderWrapper>
+        <Slider
+          min={min}
+          max={max}
+          range
+          value={Array.isArray(sliderValue) ? sliderValue : [min, sliderValue]}
+          onChange={handleSliderChange}
+          tooltip={{
+            formatter: val => (val !== null ? numberFormatter(val) : ''),
+          }}
+        />
+      </SliderWrapper>
+    );
+  };
 
   const renderInputs = () => (
     <Wrapper
