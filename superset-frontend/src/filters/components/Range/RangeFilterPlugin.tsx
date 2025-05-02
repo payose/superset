@@ -157,7 +157,7 @@ const validateRange = (
       enableSingleValue === SingleValueType.Exact;
     const value = isSingleMin ? inputMin : inputMax;
 
-    if (!isNumber(value) && !enableEmptyFilter) {
+    if (!isNumber(value) && enableEmptyFilter) {
       return { isValid: false, errorMessage: requiredError };
     }
 
