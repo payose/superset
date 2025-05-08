@@ -57,7 +57,6 @@ const Wrapper = styled.div`
   width: 100%;
 
   .antd5-input-number {
-    width: 100%;
     min-width: 80px;
     position: relative;
   }
@@ -97,10 +96,10 @@ const HorizontalLayout = styled.div`
       }
 
       .inputs-container {
-        flex: 1;
-        min-width: 200px;
-        max-width: 300px;
+        min-width: 160px;
+        max-width: 200px;
       }
+
     }
 
     .message-container {
@@ -144,7 +143,8 @@ const validateRange = (
   enableSingleValue?: SingleValueType,
 ): { isValid: boolean; errorMessage: string | null } => {
   const [inputMin, inputMax] = values;
-  const requiredError = t('Filter value is required');
+  const requiredError = t('Please provide a valid min or max value');
+  const minMaxError = t('Min value cannot be greater than max value');
   const rangeError = t('Numbers must be within %(min)s and %(max)s', {
     min,
     max,
@@ -157,7 +157,7 @@ const validateRange = (
       enableSingleValue === SingleValueType.Exact;
     const value = isSingleMin ? inputMin : inputMax;
 
-    if (!isNumber(value) && enableEmptyFilter) {
+    if (!isNumber(value)) {
       return { isValid: false, errorMessage: requiredError };
     }
 
@@ -178,7 +178,7 @@ const validateRange = (
   if (enableEmptyFilter && inputMin === null && inputMax === null) {
     return {
       isValid: false,
-      errorMessage: t('Please provide a valid min or max value'),
+      errorMessage: requiredError,
     };
   }
 
@@ -186,7 +186,7 @@ const validateRange = (
   if (inputMin !== null && inputMax !== null && inputMin > inputMax) {
     return {
       isValid: false,
-      errorMessage: t('Min value cannot be greater than max value'),
+      errorMessage: minMaxError,
     };
   }
 
@@ -249,14 +249,14 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
     const [inputMin, inputMax] = inputValue;
 
     // For single value filters
-    if (enableSingleValue === SingleValueType.Minimum) {
+    if (
+      enableSingleValue === SingleValueType.Minimum ||
+      enableSingleValue === SingleValueType.Exact
+    ) {
       return inputMin !== null ? inputMin : min;
     }
     if (enableSingleValue === SingleValueType.Maximum) {
       return inputMax !== null ? inputMax : max;
-    }
-    if (enableSingleValue === SingleValueType.Exact) {
-      return inputMin !== null ? inputMin : (min + max) / 2;
     }
 
     // For range filters - use placeholders when values are null
