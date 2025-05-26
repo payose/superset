@@ -137,7 +137,6 @@ const DropdownContainer = forwardRef(
     const { current } = ref;
     const [itemsWidth, setItemsWidth] = useState<number[]>([]);
     const [popoverVisible, setPopoverVisible] = useState(false);
-    // We use React.useState to be able to mock the state in Jest
     const [overflowingIndex, setOverflowingIndex] = useState<number>(-1);
 
     let targetRef = useRef<HTMLDivElement>(null);
@@ -147,15 +146,15 @@ const DropdownContainer = forwardRef(
 
     const [showOverflow, setShowOverflow] = useState(false);
 
-    const reduceItems = (items: Item[]): [Item[], string[]] =>
-      items.reduce(
-        ([items, ids], item) => {
-          items.push({
+    const reduceItems = (itemsToReduce: Item[]): [Item[], string[]] =>
+      itemsToReduce.reduce(
+        ([reducedItems, ids], item) => {
+          reducedItems.push({
             id: item.id,
             element: cloneElement(item.element, { key: item.id }),
           });
           ids.push(item.id);
-          return [items, ids];
+          return [reducedItems, ids];
         },
         [[], []] as [Item[], string[]],
       );
@@ -179,56 +178,62 @@ const DropdownContainer = forwardRef(
       [items, overflowingIndex],
     );
 
+    const recalculateItemWidths = useMemo(
+      () => () => {
+        const container = current?.children.item(0);
+        if (container) {
+          const { children } = container;
+          const childrenArray = Array.from(children);
+          const newMeasuredWidths = childrenArray.map(
+            child => child.getBoundingClientRect().width,
+          );
+          setItemsWidth(prevItemsWidth => {
+            const updatedWidths = new Array(items.length).fill(0);
+            if (prevItemsWidth && prevItemsWidth.length === items.length) {
+              for (let i = 0; i < items.length; i += 1) {
+                updatedWidths[i] = prevItemsWidth[i];
+              }
+            }
+            newMeasuredWidths.forEach((itemWidth, idx) => {
+              if (idx < updatedWidths.length) {
+                updatedWidths[idx] = itemWidth;
+              }
+            });
+            return updatedWidths;
+          });
+        }
+      },
+      [current, items.length],
+    );
+
     useEffect(() => {
       const container = current?.children.item(0);
-      if (!container) return;
+      if (!container) return undefined;
 
       const childrenArray = Array.from(container.children);
+      const resizeObserver = new ResizeObserver(recalculateItemWidths);
+      childrenArray.forEach(child => resizeObserver.observe(child));
 
-      const resizeObserver = new ResizeObserver(() => {
-        recalculateItemWidths();
-      });
-
-      childrenArray.map(child => resizeObserver.observe(child));
-
-      // eslint-disable-next-line consistent-return
       return () => {
-        childrenArray.map(child => resizeObserver.unobserve(child));
+        childrenArray.forEach(child => resizeObserver.unobserve(child));
         resizeObserver.disconnect();
       };
-    }, [items.length]);
-
-    // callback to update item widths so that the useLayoutEffect runs whenever
-    // width of any of the child changes
-    const recalculateItemWidths = () => {
-      const container = current?.children.item(0);
-      if (container) {
-        const { children } = container;
-        const childrenArray = Array.from(children);
-
-        const currentWidths = childrenArray.map(
-          child => child.getBoundingClientRect().width,
-        );
-
-        // Update state with new widths
-        setItemsWidth(currentWidths);
-      }
-    };
+    }, [items.length, recalculateItemWidths, notOverflowedItems.length]);
 
     useLayoutEffect(() => {
       if (popoverVisible) {
         return;
       }
-      const container = current?.children.item(0);
-      if (container) {
-        const { children } = container;
-        const childrenArray = Array.from(children);
-        // If items length change, add all items to the container
-        // and recalculate the widths
+      const itemContainerNode = current?.children.item(0);
+      if (itemContainerNode) {
+        const visibleChildrenElements = Array.from(itemContainerNode.children);
+
         if (itemsWidth.length !== items.length) {
-          if (childrenArray.length === items.length) {
+          if (visibleChildrenElements.length === items.length) {
             setItemsWidth(
-              childrenArray.map(child => child.getBoundingClientRect().width),
+              visibleChildrenElements.map(
+                child => child.getBoundingClientRect().width,
+              ),
             );
           } else {
             setOverflowingIndex(-1);
@@ -236,41 +241,63 @@ const DropdownContainer = forwardRef(
           }
         }
 
-        // Calculates the index of the first overflowed element
-        // +1 is to give at least one pixel of difference and avoid flakiness
-        const index = childrenArray.findIndex(
+        const itemContainerRightBoundary =
+          itemContainerNode.getBoundingClientRect().right + 1;
+        const firstOverflowingChildIndex = visibleChildrenElements.findIndex(
           child =>
-            child.getBoundingClientRect().right >
-            container.getBoundingClientRect().right + 1,
+            child.getBoundingClientRect().right > itemContainerRightBoundary,
         );
 
-        // If elements fit (-1) and there's overflowed items
-        // then preserve the overflow index. We can't use overflowIndex
-        // directly because the items may have been modified
-        let newOverflowingIndex =
-          index === -1 && overflowedItems.length > 0
-            ? items.length - overflowedItems.length
-            : index;
+        let newOverflowingIndex = firstOverflowingChildIndex;
 
-        if (width > previousWidth) {
-          // Calculates remaining space in the container
-          const button = current?.children.item(1);
-          const buttonRight = button?.getBoundingClientRect().right || 0;
-          const containerRight = current?.getBoundingClientRect().right || 0;
-          const remainingSpace = containerRight - buttonRight;
+        if (firstOverflowingChildIndex === -1 && overflowedItems.length > 0) {
+          newOverflowingIndex = items.length - overflowedItems.length;
+        }
 
-          // Checks if some elements in the dropdown fits in the remaining space
-          let sum = 0;
-          for (let i = childrenArray.length; i < items.length; i += 1) {
-            sum += itemsWidth[i];
-            if (sum <= remainingSpace) {
-              newOverflowingIndex = i + 1;
+        if (
+          width > previousWidth &&
+          newOverflowingIndex !== -1 &&
+          newOverflowingIndex < items.length
+        ) {
+          const currentItemContainerWidth =
+            itemContainerNode.getBoundingClientRect().width;
+
+          let widthUsedByVisibleItems = 0;
+          const numVisibleItems =
+            newOverflowingIndex === -1 ? items.length : newOverflowingIndex;
+
+          if (numVisibleItems > 0) {
+            for (let i = 0; i < numVisibleItems; i += 1) {
+              widthUsedByVisibleItems += itemsWidth[i] || 0;
+            }
+            widthUsedByVisibleItems +=
+              (numVisibleItems - 1) * (theme.gridUnit * 4);
+          }
+
+          const availableSpaceForMore =
+            currentItemContainerWidth - widthUsedByVisibleItems;
+          let accumulatedWidthOfItemsToAdd = 0;
+          let itemsCanBeAdded = 0;
+
+          for (let i = numVisibleItems; i < items.length; i += 1) {
+            const itemToAddWidth = itemsWidth[i] || 0;
+            if (itemToAddWidth === 0) break;
+
+            const gap = theme.gridUnit * 4;
+            if (
+              accumulatedWidthOfItemsToAdd + itemToAddWidth + gap <=
+              availableSpaceForMore
+            ) {
+              accumulatedWidthOfItemsToAdd += itemToAddWidth + gap;
+              itemsCanBeAdded += 1;
             } else {
               break;
             }
           }
+          if (itemsCanBeAdded > 0) {
+            newOverflowingIndex = numVisibleItems + itemsCanBeAdded;
+          }
         }
-
         setOverflowingIndex(newOverflowingIndex);
       }
     }, [
@@ -280,6 +307,8 @@ const DropdownContainer = forwardRef(
       overflowedItems.length,
       previousWidth,
       width,
+      popoverVisible,
+      theme.gridUnit,
     ]);
 
     useEffect(() => {
@@ -323,11 +352,8 @@ const DropdownContainer = forwardRef(
 
     useLayoutEffect(() => {
       if (popoverVisible) {
-        // Measures scroll height after rendering the elements
         setTimeout(() => {
           if (targetRef.current) {
-            // We only set overflow when there's enough space to display
-            // Select's popovers because they are restrained by the overflow property.
             setShowOverflow(targetRef.current.scrollHeight > MAX_HEIGHT);
           }
         }, 100);
@@ -343,13 +369,15 @@ const DropdownContainer = forwardRef(
       [ref],
     );
 
-    // Closes the popover when scrolling on the document
     useEffect(() => {
-      document.onscroll = popoverVisible
-        ? () => setPopoverVisible(false)
-        : null;
+      const closeOnScroll = () => {
+        if (popoverVisible) {
+          setPopoverVisible(false);
+        }
+      };
+      document.addEventListener('scroll', closeOnScroll, true);
       return () => {
-        document.onscroll = null;
+        document.removeEventListener('scroll', closeOnScroll, true);
       };
     }, [popoverVisible]);
 
@@ -367,7 +395,8 @@ const DropdownContainer = forwardRef(
             align-items: center;
             gap: ${theme.gridUnit * 4}px;
             margin-right: ${theme.gridUnit * 4}px;
-            min-width: 0px;
+            min-width: 0px; /* Allows shrinking */
+            flex-shrink: 1; /* Allows shrinking in flex layout */
           `}
           data-test="container"
           style={style}
@@ -379,8 +408,6 @@ const DropdownContainer = forwardRef(
             <Global
               styles={css`
                 .antd5-popover-inner {
-                  // Some OS versions only show the scroll when hovering.
-                  // These settings will make the scroll always visible.
                   ::-webkit-scrollbar {
                     -webkit-appearance: none;
                     width: 14px;
@@ -398,7 +425,6 @@ const DropdownContainer = forwardRef(
                 }
               `}
             />
-
             <Popover
               overlayInnerStyle={{
                 maxHeight: `${MAX_HEIGHT}px`,
