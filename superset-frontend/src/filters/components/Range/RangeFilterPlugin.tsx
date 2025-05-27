@@ -220,6 +220,7 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
     filterState,
     inputRef,
     filterBarOrientation = FilterBarOrientation.Vertical,
+    isOverflowingFilterBar,
   } = props;
 
   const [row] = data;
@@ -618,7 +619,8 @@ export default function RangeFilterPlugin(props: PluginFilterRangeProps) {
         <StyledFormItem
           aria-labelledby={`filter-name-${formData.nativeFilterId}`}
         >
-          {filterBarOrientation === FilterBarOrientation.Horizontal ? (
+          {filterBarOrientation === FilterBarOrientation.Horizontal &&
+          !isOverflowingFilterBar ? (
             <HorizontalLayout>
               <div className="controls-container">
                 <InfoTooltip />
