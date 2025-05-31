@@ -136,6 +136,7 @@ const DropdownContainer = forwardRef(
     const previousWidth = usePrevious(width) || 0;
     const { current } = ref;
     const [itemsWidth, setItemsWidth] = useState<number[]>([]);
+    const [containerWidth, setContainerWidth] = useState(0);
     const [popoverVisible, setPopoverVisible] = useState(false);
     const [overflowingIndex, setOverflowingIndex] = useState<number>(-1);
 
@@ -211,14 +212,20 @@ const DropdownContainer = forwardRef(
       if (!container) return undefined;
 
       const childrenArray = Array.from(container.children);
-      const resizeObserver = new ResizeObserver(recalculateItemWidths);
+      const resizeObserver = new ResizeObserver(entries => {
+        recalculateItemWidths();
+        entries.forEach(entry => {
+          if (entry.target === container) {
+            setContainerWidth(entry.contentRect.width);
+          }
+        });
+      });
       resizeObserver.observe(container);
       childrenArray.forEach(child => resizeObserver.observe(child));
 
       return () => {
         childrenArray.forEach(child => resizeObserver.unobserve(child));
         resizeObserver.disconnect();
-        resizeObserver.unobserve(container);
       };
     }, [items.length, recalculateItemWidths, notOverflowedItems.length]);
 
@@ -311,6 +318,7 @@ const DropdownContainer = forwardRef(
       width,
       popoverVisible,
       theme.gridUnit,
+      containerWidth,
     ]);
 
     useEffect(() => {
