@@ -212,11 +212,13 @@ const DropdownContainer = forwardRef(
 
       const childrenArray = Array.from(container.children);
       const resizeObserver = new ResizeObserver(recalculateItemWidths);
+      resizeObserver.observe(container);
       childrenArray.forEach(child => resizeObserver.observe(child));
 
       return () => {
         childrenArray.forEach(child => resizeObserver.unobserve(child));
         resizeObserver.disconnect();
+        resizeObserver.unobserve(container);
       };
     }, [items.length, recalculateItemWidths, notOverflowedItems.length]);
 
